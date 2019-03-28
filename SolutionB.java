@@ -1,111 +1,167 @@
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Scanner;
 
-class SiteStats {
-    private String url;
-    private int numVisits;
+class Road {
+    public String city1;
+    public String city2;
+    public int safetyScore;
 
-    /**
-     * Constructor for the SiteStats class
-     * 
-     * @param url
-     *            String that represents an URL that the user has visited
-     * @param numVisits
-     *            An int that represents the number of times that the user has
-     *            visited the url
-     */
-    public SiteStats(String url, int numVisits) {
-        this.url = url;
-        this.numVisits = numVisits;
+    public Road(String city1, String city2, int safetyScore) {
+        this.city1 = city1;
+        this.city2 = city2;
+        this.safetyScore = safetyScore;
+    }
+}
+
+class RoadMap {
+    Map<String, Set<Road>> roadMap = new HashMap<String, Set<Road>>();
+
+    //This function helps to get all the cities in the graph	
+    public Set<String> getAllCities() {
+        return this.roadMap.keySet();
     }
 
-    /**
-     * This method returns the number of times that the user has visited the url.
-     * 
-     * @return An int that represents the number of times that the user has visited
-     *         the url
-     */
-    public int getNumVisits() {
-        return this.numVisits;
+    //This function will read the input
+    public void readLine(String line) {
+        String[] csv = line.split(",");
+        String city1 = csv[0];
+        String city2 = csv[1];
+        int safety = Integer.parseInt(csv[2]);
+        addRoad(city1, city2, safety);
     }
 
-    /**
-     * This method returns the url that we are currently tracking
-     * 
-     * @return A String that represents the url that we are currently tracking
-     */
-    public String getUrl() {
-        return this.url;
+    private void addCity(String city) {
+        this.roadMap.put(city, new HashSet<Road>());
     }
 
-    /**
-     * This method updates the number of times that we have visited the url
-     * 
-     * @param an
-     *            int that represents the number that we want to set numVisits to
-     */
-    public void setNumVisits(int updatedNumVisits) {
-        this.numVisits = updatedNumVisits;
+    //This function will add both outgoing and incoming roads between two cities
+    private void addRoad(String city1, String city2, int safetyScore) {
+        Road road1 = new Road(city1, city2, safetyScore);
+        Road road2 = new Road(city2, city1, safetyScore);
+        if (!this.roadMap.containsKey(city1)) {
+            addCity(city1);
+        }
+        if (!this.roadMap.containsKey(city2)) {
+            addCity(city2);
+        }
+
+        this.roadMap.get(city1).add(road1);
+        this.roadMap.get(city2).add(road2);
     }
 
-    public String toString() {
-        return this.url + " | " + this.numVisits;
+    //This function will return all the outgoing roads from a city
+    public Set<Road> getAllOutgoingRoads(String node) {
+        return this.roadMap.get(node);
     }
 
 }
 
-public class SolutionB {
+public class GraphAssignment {
 
-    private static Queue<SiteStats> sites = new LinkedList<SiteStats>();
+    static RoadMap roadMap = new RoadMap();
+    static int maxValue = 100000;
 
-
-    // Main method to list top n visited sites
-    public static void listTopVisitedSites(Queue<SiteStats> sites, int n) {
-        // WRITE CODE HERE
-		List<SiteStats> arr = new LinkedList<>();	
-			while(sites.size() > 0){
-				arr.add(sites.remove());
-			}
-			while(arr.size() > 0){
-				int maxIndex = 0;
-				for(int i = 0; i < arr.size();i++){
-					if( arr.get(i).getNumVisits() > arr.get(maxIndex).getNumVisits())
-					maxIndex = i;
-				}
-				sites.add(arr.remove(maxIndex));
-			}
-			int length = sites.size()-n;
-			while (sites.size() > length) {
-				System.out.println(sites.remove());
-			}
-		
+    private static void relax(Road road, Map<String, Integer> safety, Map<String, String> safetyPath) {
+        int possible = safety.get(road.city1) + road.safetyScore;
+        if (safety.get(road.city2) > possible) {
+            safety.put(road.city2, possible);
+            safetyPath.put(road.city2, road.city1);
+        }
     }
 
-    // Method to find the website in the queue and increment the visited count by 1, adding new node in case website is not found
-    public static void updateCount(String url) {
-        // WRITE CODE HERE
-		for(SiteStats site : sites){
-            if(site.getUrl() == url ){
-                site.setNumVisits(site.getNumVisits() + 1);
-                return;
+    static class SafetyComparator implements Comparator<String> {
+        private final Map<String, Integer> safety;
+
+        public SafetyComparator(Map<String, Integer> safety) {
+            this.safety = safety;
+        }
+
+        public int compare(String c1, String c2) {
+            if (this.safety.get(c1) < this.safety.get(c2)) {
+                return -1;
+            } else if (this.safety.get(c1) > this.safety.get(c2)) {
+                return 1;
+            } else {
+                return 0;
             }
         }
-        sites.add(new SiteStats(url, 1));
-        
+    }
+
+    public static void readReport(Scanner scanner) {
+        while (true) {
+            String mapLine = scanner.nextLine();
+            if (mapLine.equals("")) {
+                break;
+            }
+            roadMap.readLine(mapLine);
+        }
+
+    }
+
+    public static void findSafestRouteToCity(String source, String destination) {
+        // PART-B: Write the java code to find the safest route between any two cities
+
+        //Note:The report values of safety are between 1-100
+		PriorityQueue<String> toProcess = new PriorityQueue<>();
+        Set<String> visitedNodes = new HashSet<>();
+        Map<String, Road> nodeToParentPointer = new HashMap<>();
+
+        // Initial nodes
+        toProcess.add(source);
+        nodeToParentPointer.put(source, null);
+
+        // Traverse the queue
+        while (!toProcess.isEmpty()) {
+            String current = toProcess.poll();
+            visitedNodes.add(current);
+
+            if (current.equals(destination)) {
+                break;
+            }
+            // Relax node
+            for (Road road : roadMap.getAllOutgoingRoads(current)) {
+                if (!visitedNodes.contains(road.city2)){
+                    toProcess.add(road.city2);
+                    nodeToParentPointer.put(road.city2, road);
+                }
+            }
+        }
+        //backtracking
+        List<String> path = new ArrayList<>();
+        String current = destination;
+        while (true) {
+            path.add(current);
+            Road parentPointer = nodeToParentPointer.get(current);
+            if (parentPointer == null) {
+                break;
+            }
+            current = parentPointer.city1;
+        }
+        Collections.reverse(path);
+        StringJoiner sj = new StringJoiner("->");
+        for (String city : path) {
+            sj.add(city);
+        }
+        System.out.println(sj);
+
     }
 
     public static void main(String[] args) {
-        String[] visitedSites = { "www.google.co.in", "www.google.co.in", "www.facebook.com", "www.upgrad.com", "www.google.co.in", "www.youtube.com",
-                "www.facebook.com", "www.upgrad.com", "www.facebook.com", "www.google.co.in", "www.microsoft.com", "www.9gag.com", "www.netflix.com",
-                "www.netflix.com", "www.9gag.com", "www.microsoft.com", "www.amazon.com", "www.amazon.com", "www.uber.com", "www.amazon.com",
-                "www.microsoft.com", "www.upgrad.com" };
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter the graph");
+        readReport(scanner);
 
-        for (String url : visitedSites) {
-            updateCount(url);
-        }
-        listTopVisitedSites(sites, 5);
+        System.out.println("Enter the source ");
+        String source = scanner.nextLine();
+        System.out.println("Enter the destination ");
+        String destination = scanner.nextLine();
+        System.out.println("The route from "+source+" to "+destination+" is");
 
+        findSafestRouteToCity(source, destination);
     }
-
 }
